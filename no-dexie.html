@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+    <head>
+            <link rel="stylesheet" href="../styles/global.css">
+    </head>
+    <body>
+        <h2 style="color:white;">Emergency File Recovery for Eagle Animation</h2>
+        <p id="link"></p>
+        <script>
+        // Concept from https://forum.obsidian.md/t/how-to-find-export-and-import-obsidian-indexeddb-on-mobile-android-using-microsoft-edge/96259
+        const dbName = 'BlobFramesDatabase';
+        async function exportIndexedDB(dbName) {
+          return new Promise((resolve, reject) => {
+              var req = indexedDB.open(dbName);
+              req.onsuccess = function (event) {
+                  let db = event.target.result;
+
+                  if (!db.objectStoreNames || !db.objectStoreNames.length) {
+                      reject(`❌ Error: Database "${dbName}" has no available object stores.`);
+                      return;
+                  }
+
+                  let tx = db.transaction(db.objectStoreNames, "readonly");
+                  let promises = [];
+
+                  for (let storeName of db.objectStoreNames) {
+                      let store = tx.objectStore(storeName);
+                      let getAllReq = store.getAll();
+                      let storePromise = new Promise((resolve, reject) => {
+                          getAllReq.onsuccess = () => resolve({ [storeName]: getAllReq.result });
+                          getAllReq.onerror = () => reject(getAllReq.error);
+                      });
+                      promises.push(storePromise);
+                  }
+
+                  Promise.all(promises)
+                      .then(results => {
+                          let exportData = Object.assign({}, ...results);
+                          resolve(exportData);
+                      })
+                      .catch(reject);
+              };
+
+              req.onerror = () => reject(`❌ IndexedDB failed to open: " + req.error`);
+          });
+        }
+
+
+        async function saveDB(dbName) {
+            try {
+                const data = await exportIndexedDB(dbName);
+                const jsonString = JSON.stringify(data, null, 2);
+                let myblob = new Blob([jsonString], {type: "application/json",});
+                const aEl = document.createElement('a');
+                aEl.href = URL.createObjectURL(myblob);
+                aEl.download = `${dbName}.json`;
+                aEl.click();
+                document.getElementById("link").innerHTML = ` <a href="${URL.createObjectURL(myblob)}" download="${dbName}.json">Right-click to download database export</a>`;
+
+            } catch (error) {
+                console.error(`⚠️ Failed to export database "${dbName}":`, error);
+            }
+        };
+
+        saveDB(dbName);
+        </script>
+    </body>
+</html>
